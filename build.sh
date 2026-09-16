@@ -96,15 +96,23 @@ ln -s /Applications "$STAGE/Applications"
 cat > "$STAGE/Read me first.txt" <<TXT
 $APP_NAME $VERSION
 
-Drag $APP_NAME to the Applications folder, then eject this disk image.
+1. Drag $APP_NAME to the Applications folder.
+2. Eject this disk image.
+3. Open Terminal and run this once:
 
-The app is not notarised by Apple, so the first launch needs one extra step:
-control-click $APP_NAME in Applications, choose Open, then confirm.
-After that it opens normally. Double-clicking without doing this shows
-"$APP_NAME is damaged" or "cannot be opened", which is Gatekeeper, not a real fault.
+       xattr -dr com.apple.quarantine /Applications/$APP_NAME.app
 
-If macOS still refuses, run this once in Terminal:
-    xattr -dr com.apple.quarantine /Applications/$APP_NAME.app
+4. Launch $APP_NAME normally from then on.
+
+Step 3 is not optional. $APP_NAME is signed but not notarised by Apple, and
+macOS quarantines anything downloaded from the internet. Without that command
+macOS will refuse to open it, usually claiming the app is "damaged" — it is not,
+that is just what Gatekeeper says about un-notarised apps.
+
+The old trick of control-clicking and choosing Open no longer works: Apple
+removed that bypass in macOS 15. On macOS 15 and later you can alternatively try
+to open the app, then go to System Settings > Privacy & Security and click
+"Open Anyway" near the bottom. The Terminal command above is more reliable.
 
 Requires an Apple Silicon Mac running macOS $MIN_MACOS or later.
 TXT
