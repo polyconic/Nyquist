@@ -136,8 +136,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         poolControl.action = #selector(renderSettingChanged)
         poolControl.segmentStyle = .rounded
         poolControl.toolTip = "How to collapse the many analysis cells behind one pixel.\n"
-            + "Avg shows true sustained level and matches Spek.\n"
-            + "Peak never hides a transient or a stray spike."
+            + "Avg: mean power — the energy actually there.\n"
+            + "Typ: mean of the dB values, as Spek does — the level most of the time, so bursty highs look sparse.\n"
+            + "Peak: the loudest cell — never hides a transient."
 
         scaleControl.selectedSegment = 0
         scaleControl.target = self
@@ -153,14 +154,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         floorSlider.widthAnchor.constraint(equalToConstant: 96).isActive = true
         floorSlider.toolTip = "Black point — the level that maps to the darkest color"
 
-        gainSlider.minValue = 0
+        // Negative gain lets the display match Spek, whose scale reads 12 dB lower.
+        gainSlider.minValue = -24
         gainSlider.maxValue = 48
         gainSlider.doubleValue = 0
         gainSlider.isContinuous = true
         gainSlider.target = self
         gainSlider.action = #selector(renderSettingChanged)
         gainSlider.widthAnchor.constraint(equalToConstant: 80).isActive = true
-        gainSlider.toolTip = "Brighten the whole image without re-analyzing"
+        gainSlider.toolTip = "Shift the whole image without re-analyzing. −12 dB matches Spek's scale."
 
         for l in [floorLabel, gainLabel] {
             l.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
@@ -300,7 +302,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     private func updateSliderLabels() {
         floorLabel.stringValue = String(format: "%.0f dB", render.dbFloor).replacingOccurrences(of: "-", with: "−")
-        gainLabel.stringValue = String(format: "+%.0f dB", render.gain)
+        gainLabel.stringValue = String(format: "%+.0f dB", render.gain).replacingOccurrences(of: "-", with: "−")
     }
 
     // MARK: - Actions

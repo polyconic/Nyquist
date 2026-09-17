@@ -4,12 +4,13 @@ import CoreGraphics
 /// How the many analysis cells behind one screen pixel are collapsed.
 enum Pooling: String, CaseIterable {
     case average = "Avg"
+    case typical = "Typ"
     case peak = "Peak"
 }
 
 struct RenderSettings {
     var pooling: Pooling = .average
-    var colormapName: String = "Spek Classic"
+    var colormapName: String = "SoX"
     var dbFloor: Double = -120
     var gain: Double = 0
     var logFrequency: Bool = false
@@ -112,7 +113,7 @@ enum SpectrogramRenderer {
 
         var pixels = [UInt32](repeating: 0, count: w * h)
         let binCount = sg.binCount
-        let averaging = settings.pooling == .average
+        let pooling = settings.pooling
 
         pixels.withUnsafeMutableBufferPointer { out in
             let outBase = out.baseAddress!
@@ -128,7 +129,7 @@ enum SpectrogramRenderer {
                         for y in 0..<h {
                             let b0 = rowStart[y], b1 = rowEnd[y]
                             var value: Float = -300
-                            if averaging {
+                            if pooling == .average {
                                 // Mean power, so collapsing N cells does not inflate the
                                 // noise floor the way a peak does. dB -> power is
                                 // 10^(v/10) == exp2(v * log2(10)/10).
@@ -145,6 +146,19 @@ enum SpectrogramRenderer {
                                     f += 1
                                 }
                                 if n > 0 && sum > 0 { value = log2f(sum / Float(n)) * 3.01029996 }
+                            } else if pooling == .typical {
+                                // Mean of the dB values, as Spek does. Bursty content such
+                                // as hi-hats sinks toward the level between hits.
+                                var sum: Float = 0
+                                var n = 0
+                                var f = f0
+                                while f < f1 {
+                                    let row = db + f * binCount
+                                    var b = b0
+                                    while b < b1 { sum += row[b]; b += 1; n += 1 }
+                                    f += 1
+                                }
+                                if n > 0 { value = sum / Float(n) }
                             } else {
                                 var f = f0
                                 while f < f1 {

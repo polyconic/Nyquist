@@ -31,17 +31,28 @@ struct Colormap {
                        blue: CGFloat(v & 0xFF) / 255, alpha: 1)
     }
 
-    static let all: [Colormap] = [spek, magma, inferno, plasma, viridis, turbo,
+    static let all: [Colormap] = [sox, magma, inferno, plasma, viridis, turbo,
                                   cividis, fire, ice, spectrum, grayscale]
 
-    static func named(_ n: String) -> Colormap { all.first { $0.name == n } ?? spek }
+    static func named(_ n: String) -> Colormap { all.first { $0.name == n } ?? sox }
 
-    static let spek = Colormap(name: "Spek Classic", stops: [
-        (0.00, 0, 0, 0), (0.08, 12, 8, 40), (0.16, 28, 12, 74), (0.24, 48, 14, 106),
-        (0.32, 74, 16, 124), (0.40, 104, 20, 130), (0.48, 136, 26, 128),
-        (0.56, 168, 34, 118), (0.64, 198, 44, 100), (0.70, 219, 58, 79),
-        (0.76, 234, 78, 58), (0.82, 244, 103, 40), (0.88, 250, 134, 28),
-        (0.93, 253, 170, 30), (0.97, 254, 209, 64), (1.00, 255, 255, 220)])
+    /// Rob Sykes's SoX palette, which Spek also uses. Sampled from the formula
+    /// rather than approximated, so it matches exactly.
+    static let sox: Colormap = {
+        func channel(_ l: Double) -> (Double, Double, Double) {
+            var r = 0.0, g = 0.0, b = 0.0
+            if l >= 0.13 && l < 0.73 { r = sin((l - 0.13) / 0.60 * .pi / 2) } else if l >= 0.73 { r = 1 }
+            if l >= 0.6 && l < 0.91 { g = sin((l - 0.6) / 0.31 * .pi / 2) } else if l >= 0.91 { g = 1 }
+            if l < 0.60 { b = 0.5 * sin(l / 0.6 * .pi) } else if l >= 0.78 { b = (l - 0.78) / 0.22 }
+            return (r * 255, g * 255, b * 255)
+        }
+        let stops = (0...128).map { i -> (Double, Double, Double, Double) in
+            let t = Double(i) / 128
+            let c = channel(t)
+            return (t, c.0, c.1, c.2)
+        }
+        return Colormap(name: "SoX", stops: stops)
+    }()
 
     static let magma = Colormap(name: "Magma", stops: [
         (0.00, 0, 0, 4), (0.05, 8, 7, 29), (0.10, 20, 14, 54), (0.15, 36, 18, 80),
