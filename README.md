@@ -1,6 +1,6 @@
 # Nyquist
 
-A high-resolution audio spectrum analyser for macOS. Built as a replacement for
+A high-resolution audio spectrum analyzer for macOS. Built as a replacement for
 Spek, which is an Intel-era app that Apple's transition away from Rosetta will
 eventually strand.
 
@@ -24,8 +24,8 @@ matching constants in `Sources/AppInfo.swift`.
 |---|---|
 | Decode | AVFoundation — WAV, AIFF, FLAC, MP3, AAC/M4A, ALAC, Ogg, CAF, Wave64, AC-3 |
 | Decode fallback | ffmpeg, if installed, for Opus / WavPack / Monkey's Audio |
-| Analysis | Accelerate/vDSP real FFT, parallelised across cores |
-| Render | Hand-rolled colour mapping into a CGImage, axes drawn with Core Graphics |
+| Analysis | Accelerate/vDSP real FFT, parallelized across cores |
+| Render | Hand-rolled color mapping into a CGImage, axes drawn with Core Graphics |
 
 Decode and analysis of a 5-minute 24-bit/44.1k track take about 0.1 s combined;
 redraws while dragging a slider take 15–35 ms.
@@ -41,7 +41,7 @@ Verified two ways —
   (−3.01 dB) and the Hann window's 1.5-bin noise bandwidth (−1.76 dB) gives
   −5.59 dBFS against ffmpeg `astats`' −5.56 dBFS. A 0.03 dB agreement.
 
-Spek's display uses a different normalisation and reads darker at the top end.
+Spek's display uses a different normalization and reads darker at the top end.
 That is a display choice, not an accuracy difference. Use Floor and Gain to
 match its look if you want it.
 
@@ -69,7 +69,7 @@ A 5-minute track at 4096/4× is about 13,750 analysis columns, which is roughly
 **FFT** sets frequency resolution, **Overlap** sets time resolution. 32768/32×
 is the finest; it costs memory but stays well under a second on a 5-minute file.
 
-**Floor** is the black point. **Gain** brightens without re-analysing. Neither
+**Floor** is the black point. **Gain** brightens without re-analyzing. Neither
 triggers a re-analysis, so both are live.
 
 ## Export
@@ -81,7 +81,7 @@ crisp at any size.
 
 ## Distribution
 
-The app is ad-hoc signed, not notarised, so Gatekeeper will block the first
+The app is ad-hoc signed, not notarized, so Gatekeeper will block the first
 launch on another Mac. Control-click it in Applications, choose Open, confirm.
 Or `xattr -dr com.apple.quarantine /Applications/Nyquist.app`.
 

@@ -104,10 +104,10 @@ $APP_NAME $VERSION
 
 4. Launch $APP_NAME normally from then on.
 
-Step 3 is not optional. $APP_NAME is signed but not notarised by Apple, and
+Step 3 is not optional. $APP_NAME is signed but not notarized by Apple, and
 macOS quarantines anything downloaded from the internet. Without that command
 macOS will refuse to open it, usually claiming the app is "damaged" — it is not,
-that is just what Gatekeeper says about un-notarised apps.
+that is just what Gatekeeper says about un-notarized apps.
 
 The old trick of control-clicking and choosing Open no longer works: Apple
 removed that bypass in macOS 15. On macOS 15 and later you can alternatively try

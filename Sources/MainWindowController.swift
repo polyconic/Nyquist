@@ -151,7 +151,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         floorSlider.target = self
         floorSlider.action = #selector(renderSettingChanged)
         floorSlider.widthAnchor.constraint(equalToConstant: 96).isActive = true
-        floorSlider.toolTip = "Black point — the level that maps to the darkest colour"
+        floorSlider.toolTip = "Black point — the level that maps to the darkest color"
 
         gainSlider.minValue = 0
         gainSlider.maxValue = 48
@@ -160,7 +160,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         gainSlider.target = self
         gainSlider.action = #selector(renderSettingChanged)
         gainSlider.widthAnchor.constraint(equalToConstant: 80).isActive = true
-        gainSlider.toolTip = "Brighten the whole image without re-analysing"
+        gainSlider.toolTip = "Brighten the whole image without re-analyzing"
 
         for l in [floorLabel, gainLabel] {
             l.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
@@ -184,7 +184,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
         let stack = NSStackView(views: [
             openButton, divider(),
-            group("Colour", colormapPopup),
+            group("Color", colormapPopup),
             group("FFT", fftPopup),
             group("Overlap", overlapPopup),
             group("Window", windowPopup),
@@ -309,7 +309,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.message = "Choose an audio file to analyse"
+        panel.message = "Choose an audio file to analyze"
         if #available(macOS 11.0, *) {
             panel.allowedContentTypes = [.audio, .mp3, .wav, .aiff, .mpeg4Audio]
         }
@@ -385,7 +385,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         let settings = analysis
         let saved = preserveZoom ? spectrogramView.range : nil
 
-        showProgress("Analysing — \(settings.fftSize)-point FFT, \(settings.overlap)× overlap…", value: 0)
+        showProgress("Analyzing — \(settings.fftSize)-point FFT, \(settings.overlap)× overlap…", value: 0)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let started = Date()
             let sg = Spectrogram.analyze(audio, settings: settings) { p in

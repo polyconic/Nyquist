@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func about() {
         let ffmpeg = AudioLoader.ffmpegPath()
         let credits = NSMutableAttributedString(string: """
-            High-resolution audio spectrum analyser.
+            High-resolution audio spectrum analyzer.
 
             Analysis runs on Accelerate/vDSP. Decoding uses AVFoundation, \
             which covers WAV, AIFF, FLAC, MP3, AAC/M4A, ALAC, Ogg, CAF and Wave64.
