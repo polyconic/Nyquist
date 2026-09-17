@@ -312,17 +312,22 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.message = "Choose an audio file to analyze"
-        if #available(macOS 11.0, *) {
-            panel.allowedContentTypes = [.audio, .mp3, .wav, .aiff, .mpeg4Audio]
-        }
-        panel.allowsOtherFileTypes = true
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             self?.open(url: url)
         }
     }
 
-    func open(url: URL) {
+    func open(url: URL) { load(url: url, preserveZoom: false) }
+
+    /// Re-reads the current file from disk, keeping settings and zoom. Pointed at a
+    /// download in progress, each reload shows how much more has arrived.
+    @objc func reload() {
+        guard let url = fileURL else { NSSound.beep(); return }
+        load(url: url, preserveZoom: true)
+    }
+
+    private func load(url: URL, preserveZoom: Bool) {
         showProgress("Decoding \(url.lastPathComponent)…", value: 0)
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -335,7 +340,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
                     self.window?.title = url.lastPathComponent
                     self.window?.representedURL = url
                     self.spectrogramView.headerPath = url.path
-                    self.reanalyze(preserveZoom: false)
+                    self.reanalyze(preserveZoom: preserveZoom)
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -422,6 +427,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
                      audio.decodedVia,
                      String(format: "%.2fs", elapsed)]
         if let note = sg.reducedOverlapNote { parts.insert(note, at: 3) }
+        if audio.isPartial {
+            let pct = Int((audio.decodedDuration / max(audio.duration, 0.001) * 100).rounded(.down))
+            parts.insert("PARTIAL FILE \(pct)% — \(SpectrogramRenderer.formatTime(audio.decodedDuration, step: 1)) of "
+                         + "\(SpectrogramRenderer.formatTime(audio.duration, step: 1)) · ⌘W to reload", at: 0)
+        }
         infoLabel.stringValue = parts.joined(separator: "  ·  ")
     }
 

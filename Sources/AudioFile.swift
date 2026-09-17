@@ -9,6 +9,12 @@ struct AudioData {
     var codecDescription: String  // e.g. "PCM signed 24-bit little-endian"
     var bitDepth: Int             // 0 when not meaningful (lossy codecs)
     var decodedVia: String        // "AVFoundation" or "ffmpeg"
+    /// Set when the file ended early, e.g. a download still in progress. The
+    /// samples array keeps the full declared length, silent past this point.
+    var decodedFrames: Int? = nil
+
+    var isPartial: Bool { (decodedFrames ?? samples.count) < samples.count }
+    var decodedDuration: Double { Double(decodedFrames ?? samples.count) / sampleRate }
 
     /// Header line in the style of Spek's stream summary.
     func streamLine(fftSize: Int, window: String) -> String {
@@ -56,7 +62,10 @@ enum AudioLoader {
         let file = try AVAudioFile(forReading: url)
         let inFormat = file.processingFormat
         let channels = Int(file.fileFormat.channelCount)
-        let total = Int(file.length)
+        // macOS clips a truncated WAV's length to what is on disk; the header still
+        // knows the real length, which is what makes download progress visible.
+        var total = Int(file.length)
+        if let declared = declaredWAVFrames(url), declared > total { total = declared }
         guard total > 0, channels > 0 else {
             throw AudioLoadError.unreadable("The file contains no audio frames.")
         }
@@ -70,9 +79,15 @@ enum AudioLoader {
         var written = 0
         let scale = 1.0 / Float(channels)
         while written < total {
-            try file.read(into: buffer, frameCount: chunk)
-            let n = Int(buffer.frameLength)
-            if n == 0 { break }
+            do {
+                try file.read(into: buffer, frameCount: chunk)
+            } catch {
+                // A partial file fails at the point the data runs out. Keep what came before.
+                if written > 0 { break }
+                throw error
+            }
+            let n = min(Int(buffer.frameLength), total - written)
+            if n <= 0 { break }
             guard let chans = buffer.floatChannelData else { break }
             // processingFormat is always deinterleaved float32, so sum across planes.
             for c in 0..<Int(buffer.format.channelCount) {
@@ -85,7 +100,6 @@ enum AudioLoader {
             }
             written += n
         }
-        if written < total { mono.removeLast(total - written) }
 
         let asbd = file.fileFormat.streamDescription.pointee
         return AudioData(samples: mono,
@@ -93,7 +107,34 @@ enum AudioLoader {
                          channelCount: channels,
                          codecDescription: describe(asbd),
                          bitDepth: Int(asbd.mBitsPerChannel),
-                         decodedVia: "AVFoundation")
+                         decodedVia: "AVFoundation",
+                         decodedFrames: written < total ? written : nil)
+    }
+
+    /// Frame count from a RIFF/WAVE header's data chunk, independent of how much
+    /// of the file exists yet. Nil for RF64 or streaming headers with no real size.
+    static func declaredWAVFrames(_ url: URL) -> Int? {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? h.close() }
+        guard let d = try? h.read(upToCount: 1 << 16), d.count >= 12 else { return nil }
+        let bytes = [UInt8](d)
+        func tag(_ o: Int) -> String { String(bytes: bytes[o..<o+4], encoding: .ascii) ?? "" }
+        func u32(_ o: Int) -> Int {
+            Int(bytes[o]) | Int(bytes[o+1]) << 8 | Int(bytes[o+2]) << 16 | Int(bytes[o+3]) << 24
+        }
+        guard tag(0) == "RIFF", tag(8) == "WAVE" else { return nil }
+        var o = 12, blockAlign = 0
+        while o + 8 <= bytes.count {
+            let id = tag(o), size = u32(o + 4)
+            if id == "fmt ", o + 22 <= bytes.count {
+                blockAlign = Int(bytes[o + 20]) | Int(bytes[o + 21]) << 8
+            } else if id == "data" {
+                guard blockAlign > 0, size > 0, size != 0xFFFF_FFFF else { return nil }
+                return size / blockAlign
+            }
+            o += 8 + size + (size & 1)
+        }
+        return nil
     }
 
     private static func describe(_ d: AudioStreamBasicDescription) -> String {

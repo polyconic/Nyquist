@@ -78,12 +78,30 @@ A 5-minute track at 4096/4× is about 13,750 analysis columns, which is roughly
 | `0` or ⌘0 | Fit to window |
 | ⌘+ / ⌘− | Zoom in / out |
 | Drag and drop | Open a file |
+| ⌘W (or ⌘R) | Reload the file from disk, keeping settings and zoom |
+| ⌘⇧W | Close the window |
 
 **FFT** sets frequency resolution, **Overlap** sets time resolution. 32768/32×
 is the finest; it costs memory but stays well under a second on a 5-minute file.
 
 **Floor** is the black point. **Gain** shifts the image up or down without re-analyzing. Neither
 triggers a re-analysis, so both are live.
+
+## Files still downloading
+
+Open a file while it is still arriving — including under a temporary name like
+`.crdownload`, `.part` or `.!qB` — and Nyquist decodes as far as the data goes,
+draws the rest of the track's length as silence, and says **PARTIAL FILE 40%**
+in the status bar. Press ⌘W to reload and watch it fill in.
+
+This mirrors a Spek habit, where ⌘W happens to restart the analysis. In Spek it
+is a side effect of the `w` key, which also doubles the FFT size each time; here
+it is a plain reload that changes nothing else.
+
+WAV, AIFF, FLAC and MP3 all work natively. A truncated WAV keeps its full
+timeline because the length is read from the header, since macOS itself would
+clip it to what is on disk. A preallocated file whose tail is still zeros reads
+as complete — zeros are valid silence — but shows black past the download point.
 
 ## Export
 

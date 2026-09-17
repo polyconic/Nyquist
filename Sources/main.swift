@@ -70,7 +70,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenu.addItem(.separator())
         add(fileMenu, "Export Image…", #selector(MainWindowController.exportImage), "e")
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        // ⌘W reloads, as Spek users expect; closing moves to ⌘⇧W.
+        add(fileMenu, "Reload from Disk", #selector(MainWindowController.reload), "w")
+        let reloadAlias = fileMenu.addItem(withTitle: "Reload from Disk",
+                                           action: #selector(MainWindowController.reload), keyEquivalent: "r")
+        reloadAlias.target = controller
+        reloadAlias.isHidden = true
+        reloadAlias.allowsKeyEquivalentWhenHidden = true
+        fileMenu.addItem(.separator())
+        fileMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "W")
         fileItem.submenu = fileMenu
         main.addItem(fileItem)
 
