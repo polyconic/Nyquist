@@ -126,8 +126,8 @@ crisp at any size.
 ## Distribution
 
 The app is ad-hoc signed, not notarized, so Gatekeeper will block the first
-launch on another Mac. Control-click it in Applications, choose Open, confirm.
-Or `xattr -dr com.apple.quarantine /Applications/Nyquist.app`.
+launch on another Mac. `xattr -dr com.apple.quarantine /Applications/Nyquist.app` or
+just "Open Anyway" in System Settings "Privacy & Security" settings.
 
 Apple Silicon only. The Command Line Tools ship only the arm64 Swift runtime,
 so an Intel slice would need full Xcode installed.
