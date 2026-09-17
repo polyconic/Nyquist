@@ -79,6 +79,7 @@ A 5-minute track at 4096/4× is about 13,750 analysis columns, which is roughly
 | ⌘+ / ⌘− | Zoom in / out |
 | Drag and drop | Open a file |
 | ⌘W (or ⌘R) | Reload the file from disk, keeping settings and zoom |
+| ⌘K | Show or hide the stereo panel |
 | ⌘⇧W | Close the window |
 
 **FFT** sets frequency resolution, **Overlap** sets time resolution. 32768/32×
@@ -86,6 +87,18 @@ is the finest; it costs memory but stays well under a second on a 5-minute file.
 
 **Floor** is the black point. **Gain** shifts the image up or down without re-analyzing. Neither
 triggers a re-analysis, so both are live.
+
+## Stereo panel
+
+**Stereo** in the toolbar, or ⌘K, opens a floating window with the file's stereo
+picture: a vectorscope, a correlation meter, correlation over time with the bass
+band drawn separately, and figures for width, balance and how much bass energy is
+out of phase. The channels are decoded separately only while the panel is open,
+so the main view still holds just the mixdown.
+
+Mono compatibility is judged below 150 Hz, weighted by energy. That is the band a
+club system sums, and a dip during a breakdown where the bass is 30 dB down costs
+nothing. The same analysis drives Manifest's checks; the two apps share the code.
 
 ## Files still downloading
 

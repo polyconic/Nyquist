@@ -58,57 +58,102 @@ enum AudioLoader {
 
     // MARK: - AVFoundation
 
-    private static func loadNative(url: URL) throws -> AudioData {
-        let file = try AVAudioFile(forReading: url)
-        let inFormat = file.processingFormat
-        let channels = Int(file.fileFormat.channelCount)
-        // macOS clips a truncated WAV's length to what is on disk; the header still
-        // knows the real length, which is what makes download progress visible.
-        var total = Int(file.length)
-        if let declared = declaredWAVFrames(url), declared > total { total = declared }
-        guard total > 0, channels > 0 else {
-            throw AudioLoadError.unreadable("The file contains no audio frames.")
-        }
+    /// Reads a file through AVFoundation, tolerating one that ends early.
+    private struct NativeReader {
+        let file: AVAudioFile
+        let total: Int
+        let channels: Int
+        var sampleRate: Double { file.fileFormat.sampleRate }
 
-        var mono = [Float](repeating: 0, count: total)
-        let chunk: AVAudioFrameCount = 1 << 18
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: inFormat, frameCapacity: chunk) else {
-            throw AudioLoadError.unreadable("Could not allocate a decode buffer.")
-        }
-
-        var written = 0
-        let scale = 1.0 / Float(channels)
-        while written < total {
-            do {
-                try file.read(into: buffer, frameCount: chunk)
-            } catch {
-                // A partial file fails at the point the data runs out. Keep what came before.
-                if written > 0 { break }
-                throw error
+        init(url: URL) throws {
+            file = try AVAudioFile(forReading: url)
+            channels = Int(file.fileFormat.channelCount)
+            // macOS clips a truncated WAV's length to what is on disk; the header still
+            // knows the real length, which is what makes download progress visible.
+            var t = Int(file.length)
+            if let declared = AudioLoader.declaredWAVFrames(url), declared > t { t = declared }
+            guard t > 0, channels > 0 else {
+                throw AudioLoadError.unreadable("The file contains no audio frames.")
             }
-            let n = min(Int(buffer.frameLength), total - written)
-            if n <= 0 { break }
-            guard let chans = buffer.floatChannelData else { break }
-            // processingFormat is always deinterleaved float32, so sum across planes.
-            for c in 0..<Int(buffer.format.channelCount) {
-                let src = chans[c]
-                if c == 0 {
-                    for i in 0..<n { mono[written + i] = src[i] * scale }
-                } else {
-                    for i in 0..<n { mono[written + i] += src[i] * scale }
+            total = t
+        }
+
+        /// Calls `body(planes, channelCount, offset, count)` per chunk; returns frames read.
+        func read(_ body: (UnsafePointer<UnsafeMutablePointer<Float>>, Int, Int, Int) -> Void) throws -> Int {
+            let chunk: AVAudioFrameCount = 1 << 18
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: chunk) else {
+                throw AudioLoadError.unreadable("Could not allocate a decode buffer.")
+            }
+            var written = 0
+            while written < total {
+                do {
+                    try file.read(into: buffer, frameCount: chunk)
+                } catch {
+                    // A partial file fails where the data runs out. Keep what came before.
+                    if written > 0 { break }
+                    throw error
+                }
+                let n = min(Int(buffer.frameLength), total - written)
+                if n <= 0 { break }
+                guard let planes = buffer.floatChannelData else { break }
+                body(UnsafePointer(planes), Int(buffer.format.channelCount), written, n)
+                written += n
+            }
+            return written
+        }
+    }
+
+    private static func loadNative(url: URL) throws -> AudioData {
+        let reader = try NativeReader(url: url)
+        var mono = [Float](repeating: 0, count: reader.total)
+        let scale = 1.0 / Float(reader.channels)
+        let written = try mono.withUnsafeMutableBufferPointer { out in
+            try reader.read { planes, chans, offset, n in
+                let dst = out.baseAddress! + offset
+                for c in 0..<chans {
+                    let src = planes[c]
+                    if c == 0 {
+                        for i in 0..<n { dst[i] = src[i] * scale }
+                    } else {
+                        for i in 0..<n { dst[i] += src[i] * scale }
+                    }
                 }
             }
-            written += n
         }
-
-        let asbd = file.fileFormat.streamDescription.pointee
+        let asbd = reader.file.fileFormat.streamDescription.pointee
         return AudioData(samples: mono,
-                         sampleRate: file.fileFormat.sampleRate,
-                         channelCount: channels,
+                         sampleRate: reader.sampleRate,
+                         channelCount: reader.channels,
                          codecDescription: describe(asbd),
                          bitDepth: Int(asbd.mBitsPerChannel),
                          decodedVia: "AVFoundation",
-                         decodedFrames: written < total ? written : nil)
+                         decodedFrames: written < reader.total ? written : nil)
+    }
+
+    /// Separate channels, for the stereo panel. Decoded on demand so the main view
+    /// only ever holds the mixdown.
+    static func loadChannels(url: URL) throws -> (channels: [[Float]], sampleRate: Double) {
+        do {
+            let reader = try NativeReader(url: url)
+            var planes = [[Float]](repeating: [Float](repeating: 0, count: reader.total),
+                                   count: reader.channels)
+            _ = try reader.read { src, chans, offset, n in
+                for c in 0..<min(chans, planes.count) {
+                    planes[c].withUnsafeMutableBufferPointer {
+                        ($0.baseAddress! + offset).update(from: src[c], count: n)
+                    }
+                }
+            }
+            return (planes, reader.sampleRate)
+        } catch {
+            guard let tool = ffmpegPath() else { throw error }
+            let (raw, probe) = try ffmpegDecode(url: url, ffmpeg: tool, mono: false)
+            let ch = max(probe.channels, 1)
+            let frames = raw.count / ch
+            var planes = [[Float]](repeating: [Float](repeating: 0, count: frames), count: ch)
+            for i in 0..<frames { for c in 0..<ch { planes[c][i] = raw[i * ch + c] } }
+            return (planes, probe.rate)
+        }
     }
 
     /// Frame count from a RIFF/WAVE header's data chunk, independent of how much
@@ -186,12 +231,23 @@ enum AudioLoader {
     }
 
     private static func loadViaFFmpeg(url: URL, ffmpeg: String) throws -> AudioData {
+        let (samples, probe) = try ffmpegDecode(url: url, ffmpeg: ffmpeg, mono: true)
+        return AudioData(samples: samples,
+                         sampleRate: probe.rate,
+                         channelCount: probe.channels,
+                         codecDescription: probe.codec,
+                         bitDepth: probe.bits,
+                         decodedVia: "ffmpeg")
+    }
+
+    private static func ffmpegDecode(url: URL, ffmpeg: String, mono: Bool) throws -> ([Float], Probe) {
         let probe = probeWithFFprobe(url: url, near: ffmpeg)
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ffmpeg)
-        p.arguments = ["-v", "error", "-i", url.path, "-map", "0:a:0",
-                       "-ac", "1", "-f", "f32le", "-acodec", "pcm_f32le", "-"]
+        p.arguments = ["-v", "error", "-i", url.path, "-map", "0:a:0"]
+            + (mono ? ["-ac", "1"] : [])
+            + ["-f", "f32le", "-acodec", "pcm_f32le", "-"]
         let out = Pipe(), err = Pipe()
         p.standardOutput = out
         p.standardError = err
@@ -217,16 +273,8 @@ enum AudioLoader {
             let msg = String(decoding: errData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             throw AudioLoadError.unreadable(msg.isEmpty ? "ffmpeg produced no audio." : msg)
         }
-
-        let samples = raw.withUnsafeBytes { buf -> [Float] in
-            Array(buf.bindMemory(to: Float.self))
-        }
-        return AudioData(samples: samples,
-                         sampleRate: probe.rate,
-                         channelCount: probe.channels,
-                         codecDescription: probe.codec,
-                         bitDepth: probe.bits,
-                         decodedVia: "ffmpeg")
+        let samples = raw.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        return (samples, probe)
     }
 
     private struct Probe { var rate: Double; var channels: Int; var codec: String; var bits: Int }

@@ -88,6 +88,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add(viewMenu, "Zoom Out", #selector(MainWindowController.zoomOut), "-")
         add(viewMenu, "Fit to Window", #selector(MainWindowController.resetZoom), "0")
         viewMenu.addItem(.separator())
+        add(viewMenu, "Stereo Panel", #selector(MainWindowController.toggleStereo), "k")
+        viewMenu.addItem(.separator())
         viewMenu.addItem(withTitle: "Enter Full Screen",
                          action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]

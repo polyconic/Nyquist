@@ -1,6 +1,6 @@
 import AppKit
 
-final class MainWindowController: NSWindowController, NSWindowDelegate {
+final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation {
 
     private let spectrogramView = SpectrogramView()
     private let cursorLabel = NSTextField(labelWithString: "")
@@ -27,6 +27,16 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private var analysis = AnalysisSettings()
     private var render = RenderSettings()
     private var analysisToken = 0
+
+    private let stereoButton = NSButton(title: "Stereo", target: nil, action: nil)
+    private lazy var stereoPanel: StereoPanelController = {
+        let c = StereoPanelController(autosaveName: "NyquistStereoPanel")
+        c.onClose = { [weak self] in self?.stereoButton.state = .off }
+        return c
+    }()
+    /// Bumped on every load, so a slow stereo pass for an old file is discarded.
+    private var stereoToken = 0
+    private var stereoIsCurrent = false
 
     convenience init() {
         let window = NSWindow(
@@ -103,6 +113,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
         let openButton = NSButton(title: "Open…", target: self, action: #selector(openDocument(_:)))
         openButton.bezelStyle = .rounded
+        stereoButton.setButtonType(.pushOnPushOff)
+        stereoButton.bezelStyle = .rounded
+        stereoButton.target = self
+        stereoButton.action = #selector(toggleStereo)
+        stereoButton.toolTip = "Stereo picture: vectorscope, correlation and width (⌘K)"
         let fitButton = NSButton(title: "Fit", target: self, action: #selector(resetZoom))
         fitButton.bezelStyle = .rounded
         fitButton.toolTip = "Zoom out to the whole file (0)"
@@ -196,7 +211,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             group("Floor", floorStack),
             group("Gain", gainStack),
             divider(),
-            fitButton, exportButton,
+            stereoButton, fitButton, exportButton,
         ])
         stack.orientation = .horizontal
         stack.spacing = 10
@@ -341,6 +356,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
                     self.window?.representedURL = url
                     self.spectrogramView.headerPath = url.path
                     self.reanalyze(preserveZoom: preserveZoom)
+                    self.stereoIsCurrent = false
+                    if self.stereoPanel.isShown { self.analyzeStereo() }
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -365,6 +382,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         render.gain = gainSlider.doubleValue.rounded()
         updateSliderLabels()
         spectrogramView.settings = render
+        stereoPanel.colormap = render.colormap
     }
 
     @objc private func scaleChanged() {
@@ -379,6 +397,62 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     @objc func zoomIn() { spectrogramView.zoomTime(0.5) }
     @objc func zoomOut() { spectrogramView.zoomTime(2.0) }
+
+    // MARK: - Stereo panel
+
+    @objc func toggleStereo() {
+        if stereoPanel.isShown {
+            stereoPanel.close()
+            return
+        }
+        stereoPanel.colormap = render.colormap
+        stereoPanel.show(beside: window)
+        stereoButton.state = .on
+        if !stereoIsCurrent { analyzeStereo() }
+    }
+
+    /// Decodes the channels separately and measures them. Only runs while the panel
+    /// is open, so the main view never has to hold more than the mixdown.
+    private func analyzeStereo() {
+        guard let url = fileURL, let audio else {
+            stereoPanel.model = nil
+            stereoPanel.message = "Open a file to see its stereo picture"
+            return
+        }
+        stereoToken += 1
+        let token = stereoToken
+        stereoPanel.message = "Analyzing stereo…"
+        let title = url.lastPathComponent
+        let note = audio.isPartial
+            ? "Partial file — figures cover the \(Int(audio.decodedDuration / max(audio.duration, 0.001) * 100))% downloaded so far."
+            : nil
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result: Result<(StereoAnalysis.Result, Int), Error> = Result {
+                let c = try AudioLoader.loadChannels(url: url)
+                return (StereoAnalysis.analyze(channels: c.channels, sampleRate: c.sampleRate), c.channels.count)
+            }
+            DispatchQueue.main.async {
+                guard let self, token == self.stereoToken else { return }
+                switch result {
+                case .success(let (stereo, channels)):
+                    self.stereoIsCurrent = true
+                    self.stereoPanel.model = StereoPanelModel(title: title, duration: audio.duration,
+                                                              stereo: stereo, channelCount: channels,
+                                                              note: note)
+                case .failure(let error):
+                    self.stereoPanel.model = nil
+                    self.stereoPanel.message = "Could not read the channels: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(toggleStereo) {
+            item.state = stereoPanel.isShown ? .on : .off
+        }
+        return true
+    }
 
     @objc func resetZoom() {
         spectrogramView.resetZoom()
