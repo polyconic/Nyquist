@@ -1,8 +1,6 @@
 # Nyquist
 
-A high-resolution audio spectrum analyzer for macOS. Built as a replacement for
-Spek, which is an Intel-era app that Apple's transition away from Rosetta will
-eventually strand.
+A high-resolution audio spectrum analyzer for macOS. Built as an upgrade to Spek.
 
 Nyquist shares no code with Spek. The analysis engine is its own.
 
